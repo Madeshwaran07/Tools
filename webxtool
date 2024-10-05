@@ -1,0 +1,340 @@
+#!/usr/bin/env python_nocc_wrapper
+
+#################################################################
+#                                                               #
+#      Tool to check,                                           #
+#        if the ticket is SAFE TO WORK, for FT to WORK          #
+#                                                               #
+#    usage:                                                     #
+#          webxtool $ticket                                     # 
+#                                                               #
+#################################################################
+
+import json
+import subprocess
+import argparse
+import re
+import socket
+import time
+import sys
+from datetime import datetime, timedelta
+import akamai.usagelogger
+import akamai.color
+
+_CC = akamai.color.colors()
+
+#function to fetch required data and parse it.
+def fetch_required_data(query_for_ip_nw_region_abstract):
+    try:
+        raw_result = subprocess.check_output(query_for_ip_nw_region_abstract,shell=True, text=True)
+        parsed_result = json.loads(raw_result)
+        if not parsed_result or not parsed_result[0]:
+            print("No data found.")
+            return None, None, None, None
+        data = parsed_result[0]
+        #print(f"{result}")
+        abstract = data[1]
+        if data[0] and data[2] is not None:
+            network = data[3]
+            ipintic = data[0]
+            region = str(int(data[2]))
+            print(f"IP={ipintic}")
+            print(f"Abstract={abstract}")
+            print(f"Region={region}")
+            print(f"Network={network}")
+            return ipintic, abstract, region, network
+        else:
+            print(f"No IP and Region mentioned in ticket, Please proceed Manually")
+            return None, None, None, None
+    except subprocess.CalledProcessError as e:
+        print(f"Error fetching data: {e}")
+        return None, None, None, None
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON: {e}")
+        return None, None, None, None
+
+
+def check_akamai(checkakamai_command):
+    try:
+        check_akamai_out = subprocess.run(checkakamai_command, shell=True, text=True, capture_output=True)
+        #capturing and storing check_akamai_out
+        check_akamai_stdout_output = check_akamai_out.stdout
+        #print(stdout_output)
+        return check_akamai_stdout_output
+    except subprocess.CalledProcessError as e:
+        print(f"Error checking Akamai: {e}")
+def parse_check_akamai(check_akamai_stdout_output,ticid):
+    print(f"--------------------")
+    _CC.ClrPrint(f"Determining Machine State",'MAG','BLD')
+    print(f"--------------------")
+    data = json.loads(check_akamai_stdout_output)
+    # Extract the host details
+    hosts = data.get("host", {})
+    #now hosts will be a dict, ip_address will be key and details will be value(will be holding multiple value, so we are loopin key for all the required values in details, and triming what we want thru index)
+    for ip_address, details in hosts.items():                  
+        # Extract status and additional details
+        status = details[0]  # e.g., 'unsshable'
+        error_message = details[2].strip()  # e.g., 'root@23.2.13.142: Permission denied (publickey)'
+        # Format and print the output
+        machine_state = f"{ip_address} : {status} - {error_message}"
+        print(machine_state)
+        print ("\n Updating machine state to Ticket")
+        tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Check akamai" -d "{machine_state}"'
+        tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
+        return machine_state
+def check_suspension(checksuspension_command,ipintic):
+    try:
+        check_suspension_out = subprocess.run(checksuspension_command, shell=True, text=True, capture_output=True)
+        check_suspension_stdout_output = check_suspension_out.stdout
+        #print(check_suspension_stdout_output)
+        return check_suspension_stdout_output
+    except subprocess.CalledProcessError as e:
+        print(f"Error Checking suspension: {e}")
+def parse_check_suspension(check_suspension_stdout_output,ipintic,ticid):
+        _CC.ClrPrint(f"--------------------",'BLK','BLD')
+        _CC.ClrPrint("Checking suspension",'MAG','BLD')
+        _CC.ClrPrint(f"--------------------",'BLK','BLD')
+        #storing json
+        data = json.loads(check_suspension_stdout_output)
+        #converting json in-to list of dict. [{k:v},{k:v}]
+        suspension_data = data.get("matches")
+        if data.get("num_matches",0) == 0:
+            suspension = "No suspension records found."
+            try:
+                tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Checking Suspension | Suspendtell {ticid} | No Suspension Found" -d "{suspension}"'
+                tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
+                print(f"Updating Ticket with suspenson data")
+            except subprocess.CalledProcessError as e:
+                print(f"Error updating ticket with suspension details: {e}")
+            print(suspension)
+            return suspension
+            exit
+        if data.get("num_matches",0) == 2:
+            target1 = (suspension_data[0]["target"])
+            target2 = (suspension_data[1]["target"])
+            reason1 = (suspension_data[0]["reason"])
+            reason2 = (suspension_data[1]["reason"])
+            datetime1 = (suspension_data[0]["datetime"])
+            datetime2 = (suspension_data[1]["datetime"])
+            username1 = (suspension_data[0]["username"])
+            username2 = (suspension_data[1]["username"])
+            for match in suspension_data:
+                ticket = match["ticket"]
+                if target1 == ipintic:
+                    suspension = f"(Ticket:{ticket} \n Target-1:{target1} Reason:{reason1} Datetime:{datetime1} Username:{username1})\n Target-2:{target2} Reason:{reason2}  Datetime:{datetime2} Username:{username2})"
+                    _CC.ClrPrint("Machine is suspended",'GRN')
+                    try:
+                        tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Checking Suspension | Suspendtell {ticid} | Suspension Found" -d "{suspension}"'
+                        tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
+                        print(f"Updating Ticket with suspenson data")
+                    except subprocess.CalledProcessError as e:
+                        print(f"Error updating ticket with suspension details: {e}")
+                    print (suspension)
+                    return suspension_data
+        for match in suspension_data:
+            ticket = match["ticket"]
+            target = match["target"]
+            reason = match["reason"]
+            datetime = match["datetime"]
+            username = match["username"]
+            if target == ipintic:
+                suspension = f"(Ticket:{ticket} \n Target:{target} \n Reason:{reason} \n Datetime:{datetime} \n Username:{username})"
+                _CC.ClrPrint("Machine is suspended",'GRN')
+                try:
+                    tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Checking Suspension | Suspendtell {ticid} | Suspension Found" -d "{suspension}"'
+                    tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
+                    print(f"Updating Ticket with suspenson data")
+                except subprocess.CalledProcessError as e:
+                    print(f"Error updating ticket with suspension details: {e}")
+                print (suspension)
+                return suspension_data
+        if target != ipintic:
+            suspension = f"{ipintic} is not suspended under {ticid}"
+            print(suspension)
+            return suspension
+def suspension_time_check(suspension_data,network):
+    if suspension_data == "No suspension records found.":
+        return
+    FF_ESSL_Suspension_time = 30
+    curr_date_time_in_secs = int(datetime.utcnow().timestamp())
+    suspension_datetime_str = (suspension_data[0]["datetime"]) # storing suspension_data str
+    suspension_datetime_obj = datetime.strptime(suspension_datetime_str, "%Y-%m-%d %H:%M:%S.%f") # converting str to date_time obj
+    suspension_datetime_in_secs = int(suspension_datetime_obj.timestamp()) # converting date_time into secs
+    diff_in_secs = curr_date_time_in_secs - suspension_datetime_in_secs # difference btween curr_date_time_in_secs & suspension_datetime_in_secs in secs
+    diff_in_mins = diff_in_secs / 60 # difference btween curr_date_time_in_secs & suspension_datetime_in_secs in mins
+    if network in ["FreeFlow", "ESSL"]:
+        _CC.ClrPrint(f"--------------------",'BLK','BLD')
+        _CC.ClrPrint("Checking if machine is suspended for more than 30 mins",'MAG','BLD')
+        _CC.ClrPrint(f"--------------------",'BLK','BLD')
+        if diff_in_mins > FF_ESSL_Suspension_time:
+            _CC.ClrPrint(f"Machine is suspended for more than 30 mins | Machine is suspended for {diff_in_mins} mins",'GRN')
+            _CC.ClrPrint(f"SAFE TO WORK",'NRM','BLD')
+            try:
+                tic_update_command = f'update-tix -t {ticid} -a "Machine is suspended for more than 30 mins | Machine is suspended for {diff_in_mins} mins | SAFE TO WORK" -d "{suspension_data}"'
+                tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
+                print(f"Updating Ticket with suspenson data")
+            except subprocess.CalledProcessError as e:
+                print(f"Error updating ticket with suspension details: {e}")
+            suspended_date_time = 1
+            return suspended_date_time
+        else:
+            remaining_secs = FF_ESSL_Suspension_time * 60 - diff_in_secs
+            remaining_time = timedelta(seconds=remaining_secs)
+            remaining_mins, remaining_secs = divmod(remaining_time.total_seconds(), 60)
+            tot_suspended_time = timedelta(seconds=diff_in_secs)
+            print (f"Machine is just suspended for {tot_suspended_time} | NOT SAFE now.... | Safe after {int(remaining_mins)} minutes and {int(remaining_secs)} secs")
+            suspended_date_time = 1
+            return suspended_date_time
+def suspendit(suspension_command):
+    _CC.ClrPrint(f"--------------------",'BLK','BLD')
+    _CC.ClrPrint("Running Maint",'MAG','BLD')
+    _CC.ClrPrint(f"--------------------",'BLK','BLD')
+    try:
+        maint_out = subprocess.run(suspension_command, shell=True, text=True, capture_output=True)
+        maint_out_stdout_output = maint_out.stdout
+        #print(maint_out)
+    except subprocess.CalledProcessError as e:
+        print(f"Error Running Maint: {e}")
+    output_lines = maint_out_stdout_output.splitlines()
+    suspendtool_command = None
+    for line in output_lines:
+        if 'suspendtool' in line.lower():  # Check if 'Suspendtool' is in the line
+            suspendtool_command = line.strip()
+            suspendtool_command_json = suspendtool_command + " --json"
+            break
+    for line in output_lines:
+        if 'minutes' in line.lower(): # Check if 'minutes' is in the line
+            suspention_time = line.strip(("suspension time")[1].split(":")[0].strip())
+            break
+    if suspendtool_command:
+        print(suspendtool_command)
+        print("suspending Now..........")
+        try:
+            suspendtool_out = subprocess.run(suspendtool_command_json, shell=True, text=True, capture_output=True)
+            suspendtool_out_stdout_output = suspendtool_out.stdout
+        except subprocess.CalledProcessError as e:
+            print(f"Error Running suspendtool: {e}")
+        data = json.loads(suspendtool_out_stdout_output)
+        for key, value in data.items():
+            print(f"{key}: {value}")
+        _CC.ClrPrint(f"Machine Suspended | Safe after {suspention_time}",'MAG','BLD')
+    else:   
+        print("\nSuspendtool command not found in output.")
+def malt_region(region,malt_command):
+    try:
+        malt_region_out = subprocess.run(malt_command, shell=True, text=True, capture_output=True)
+        malt_region_out_stdout_output = malt_region_out.stdout
+        #print (malt_region_out_stdout_output)
+        data = json.loads(malt_region_out_stdout_output)
+        target_abstract = f"ExtReq: Notice of work in Secure Rack Region {region}"
+        ticket_with_target_abstract = None
+        for match in data.get('matches', []):
+            if match.get('abstract') == target_abstract:
+                ticket_with_target_abstract = match.get('ticket')
+                break
+        if ticket_with_target_abstract:
+            #print(f"Ticket with the target abstract found: {ticket_with_target_abstract}")
+            _CC.ClrPrint(f"--------------------",'BLK','BLD')
+            _CC.ClrPrint(f"Running Malt to find Secure Rack Access Ticket | ==> Ticket Found {ticket_with_target_abstract}",'GRN','BLD')
+            _CC.ClrPrint(f"--------------------",'BLK','BLD')
+            print(f"{ticket_with_target_abstract} : {target_abstract}")
+            try:
+                tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Checking Secure Rack Access Tic | malt {region} | Ticket Found {ticket_with_target_abstract}" -d "{ticket_with_target_abstract} : {target_abstract}"'
+                tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
+                print(f"Updating Ticket with malt data")
+            except subprocess.CalledProcessError as e:
+                print(f"Error updating ticket with malt details: {e}")
+            return ticket_with_target_abstract
+        else:
+            #print("No Secure rack access tic found.")
+            _CC.ClrPrint(f"--------------------",'BLK','BLD')
+            _CC.ClrPrint(f"Running Malt to find Secure Rack Access Ticket | ==> Ticket Not Found",'MAG','BLD')
+            _CC.ClrPrint(f"--------------------",'BLK','BLD')
+            print(f"No Secure Rack Access Ticket found | Not Safe to Work")
+            sys.exit()
+    except subprocess.CalledProcessError as e:
+        print(f"Error Running malt: {e}")
+
+def active_window_time_check(secure_rack_access_tic):
+    #query to find DESC(window time from tic)
+    query_to_fetch_desc = f"/home/noccsync/nocc/sysops-labs/siebel_query --json -q \"select DESCRIPTION from CMN_INT.AK_ISSUE where ISSUE_ID='{secure_rack_access_tic}'\""
+    try:
+        desc = subprocess.check_output(query_to_fetch_desc,shell=True, text=True)
+        _CC.ClrPrint(f"Calculating window time | Hang on...",'BLK','BLD')
+        matches = re.findall(r"\d{2}/\d{2}/\d{4} \d{2}:\d{2} in GMT", desc)
+        if matches and len(matches) == 2:
+            win_start_time_str = matches[0]
+            win_end_time_str = matches[1]
+            win_start_time = datetime.strptime(win_start_time_str, "%d/%m/%Y %H:%M in GMT")
+            win_end_time = datetime.strptime(win_end_time_str, "%d/%m/%Y %H:%M in GMT")
+            current_time = datetime.utcnow()
+            time_left_to_access_window = win_end_time - win_start_time
+            if time_left_to_access_window < timedelta(hours=24) and win_end_time > win_start_time and current_time > win_start_time:
+                print("Access window is less than 24 hours, and the current time is within the window.")
+            else:
+                print("Conditions are not met.")
+            print(f"Start time: {win_start_time}")
+            print(f"End time: {win_end_time}")
+            formatted_time = current_time.strftime("%d/%m/%Y %H:%M in GMT")
+            print(f"Current date and time: {formatted_time}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error fetching Description from Ticket | Please chec =k manually")
+
+    #print(desc)
+
+    
+def freeflow_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command):
+    #calling all required funcs to do freeflow checks
+    check_akamai_stdout_output = check_akamai(checkakamai_command)
+    machine_state = parse_check_akamai(check_akamai_stdout_output,ticid)
+    check_suspension_stdout_output = check_suspension(checksuspension_command,ipintic)
+    suspension = parse_check_suspension(check_suspension_stdout_output,ipintic,ticid)
+    suspended_date_time = suspension_time_check(suspension,network)
+    if suspended_date_time == 1:
+        return
+    suspendit(suspension_command)
+
+def essl_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command,malt_command):
+    secure_rack_access_tic = malt_region(region,malt_command)
+    active_window_time_check(secure_rack_access_tic)
+    check_akamai_stdout_output = check_akamai(checkakamai_command)
+    machine_state = parse_check_akamai(check_akamai_stdout_output,ticid)
+    check_suspension_stdout_output = check_suspension(checksuspension_command,ipintic)
+    suspension = parse_check_suspension(check_suspension_stdout_output,ipintic,ticid)
+    suspended_date_time = suspension_time_check(suspension,network)
+    if suspended_date_time == 1:
+        return
+    suspendit(suspension_command)
+
+#############################################################
+if __name__ == "__main__":
+
+#chekcing if script got a tic as input
+    if len(sys.argv) != 2:
+        print("Usage: python webxtool $TICKET")
+        sys.exit(1)
+ticid = sys.argv[1]
+
+print(f"Fetching IP & Region & Network.....")
+#query to fetch ip nw region abstract
+query_for_ip_nw_region_abstract= f"/home/noccsync/nocc/sysops-labs/siebel_query --json -q \"select IP_ASSET_IP_ADDRESS,ABSTRACT,REGION_NUMBER,REGION_NETWORK from CMN_INT.AK_ISSUE where ISSUE_ID='{ticid}'\""
+#query_to_fetch_desc = f"/home/noccsync/nocc/sysops-labs/siebel_query --json -q \"select DESCRIPTION from CMN_INT.AK_ISSUE where ISSUE_ID='{secure_rack_tic}'\""
+
+# Call the function and pass the query to fetch data
+ipintic, abstract, region, network = fetch_required_data(query_for_ip_nw_region_abstract)
+
+#storing required commands into variables
+
+checkakamai_command = f"erc {ipintic} --json check akamai"
+checksuspension_command = f"suspendtell --amp {ticid}"
+suspension_command = f"maint -s {ipintic} -t {ticid}"
+malt_command = f"malt {region} --amp"
+if network == "FreeFlow":
+    print("Network is FreeFlow. Performing FreeFlow Checks...")
+    #calling freeflow function
+    freeflow_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command)
+elif network == "ESSL":
+    print ("Network is ESSL. Performing ESSL Checks...")
+    essl_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command,malt_command)
+else:
+    print(f"{network} is a unknown network | Please proceed Manually")
