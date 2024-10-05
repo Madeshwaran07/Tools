@@ -336,5 +336,8 @@ if network == "FreeFlow":
 elif network == "ESSL":
     print ("Network is ESSL. Performing ESSL Checks...")
     essl_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command,malt_command)
+elif network == "COBRA":
+    print ("Network is COBRA. Performing COBRA Checks...")
+    #essl_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command,malt_command)
 else:
     print(f"{network} is a unknown network | Please proceed Manually")
