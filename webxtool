@@ -206,7 +206,7 @@ def suspendit(suspension_command):
         if 'minutes' in line.lower(): # Check if 'minutes' is in the line
             suspention_time = line.strip(("suspension time")[1].split(":")[0].strip())
             break
-    if suspendtool_command:
+    if suspendtool_command: #Running suspendtool
         print(suspendtool_command)
         print("suspending Now..........")
         try:
@@ -215,9 +215,13 @@ def suspendit(suspension_command):
         except subprocess.CalledProcessError as e:
             print(f"Error Running suspendtool: {e}")
         data = json.loads(suspendtool_out_stdout_output)
+        suspended_out = data.get('output')
         for key, value in data.items():
             print(f"{key}: {value}")
         _CC.ClrPrint(f"Machine Suspended | Safe after {suspention_time}",'MAG','BLD')
+        suspension_output_tic_update_command = f'update-tix -t {ticid} -a "Machine  suspended | Safe after {suspention_time}" -d "{suspended_out}"'
+        suspension_output_tic_update_command_out = subprocess.run(suspension_output_tic_update_command, shell=True, text=True, capture_output=True)
+        print(f"Updating Ticket with suspended data")
     else:   
         print("\nSuspendtool command not found in output.")
 def malt_region(region,malt_command):
