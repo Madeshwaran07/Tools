@@ -206,7 +206,7 @@ def suspendit(suspension_command):
         if 'minutes' in line.lower(): # Check if 'minutes' is in the line
             suspention_time = line.strip(("suspension time")[1].split(":")[0].strip())
             break
-    if suspendtool_command:
+    if suspendtool_command: #Running suspendtool
         print(suspendtool_command)
         print("suspending Now..........")
         try:
@@ -215,9 +215,13 @@ def suspendit(suspension_command):
         except subprocess.CalledProcessError as e:
             print(f"Error Running suspendtool: {e}")
         data = json.loads(suspendtool_out_stdout_output)
+        suspended_out = data.get('output')
         for key, value in data.items():
             print(f"{key}: {value}")
         _CC.ClrPrint(f"Machine Suspended | Safe after {suspention_time}",'MAG','BLD')
+        suspension_output_tic_update_command = f'update-tix -t {ticid} -a "Machine  suspended | Safe after {suspention_time}" -d "{suspended_out}"'
+        suspension_output_tic_update_command_out = subprocess.run(suspension_output_tic_update_command, shell=True, text=True, capture_output=True)
+        print(f"Updating Ticket with suspended data")
     else:   
         print("\nSuspendtool command not found in output.")
 def malt_region(region,malt_command):
@@ -265,8 +269,8 @@ def active_window_time_check(secure_rack_access_tic):
         if matches and len(matches) == 2:
             win_start_time_str = matches[0]
             win_end_time_str = matches[1]
-            win_start_time = datetime.strptime(win_start_time_str, "%d/%m/%Y %H:%M in GMT")
-            win_end_time = datetime.strptime(win_end_time_str, "%d/%m/%Y %H:%M in GMT")
+            win_start_time = datetime.strptime(win_start_time_str, "%m/%d/%Y %H:%M in GMT")
+            win_end_time = datetime.strptime(win_end_time_str, "%m/%d/%Y %H:%M in GMT")
             current_time = datetime.utcnow()
             time_left_to_access_window = win_end_time - win_start_time
             if time_left_to_access_window < timedelta(hours=24) and win_end_time > win_start_time and current_time > win_start_time:
@@ -275,10 +279,10 @@ def active_window_time_check(secure_rack_access_tic):
                 print("Conditions are not met.")
             print(f"Start time: {win_start_time}")
             print(f"End time: {win_end_time}")
-            formatted_time = current_time.strftime("%d/%m/%Y %H:%M in GMT")
+            formatted_time = current_time.strftime("%m/%d/%Y %H:%M in GMT")
             print(f"Current date and time: {formatted_time}")
     except subprocess.CalledProcessError as e:
-        print(f"Error fetching Description from Ticket | Please chec =k manually")
+        print(f"Error fetching Description from Ticket | Please check manually")
 
     #print(desc)
 
