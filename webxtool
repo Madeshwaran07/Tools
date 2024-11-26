@@ -372,7 +372,7 @@ def cobra_checks(ipintic,region,ticid,checkakamai_command,checksuspension_comman
     check_akamai_stdout_output = check_akamai(checkakamai_command)
     machine_state = parse_check_akamai(check_akamai_stdout_output,ticid)
 
-def csi_check(ipintic,ticid)
+
 
 
 #############################################################
@@ -408,8 +408,5 @@ elif network == "ESSL":
 elif network == "COBRA":
     print ("Network is COBRA. Performing COBRA Checks...")
     cobra_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command,abstract)
-elif network == "CSI"
-    print ("Network is CSI. Performing CSI Checks...")
-    csi_checks(ipintic,ticid)
 else:
     print(f"{network} is a unknown network | Please proceed Manually")
