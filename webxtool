@@ -372,6 +372,21 @@ def cobra_checks(ipintic,region,ticid,checkakamai_command,checksuspension_comman
     check_akamai_stdout_output = check_akamai(checkakamai_command)
     machine_state = parse_check_akamai(check_akamai_stdout_output,ticid)
 
+def csi_checks(ipintic,ticid):
+    query_to_check_if_decommissioned = (
+    "agg csi \"SELECT hostip AS BackendIP, csicluster, manager, hosthealthsummary, "
+    "hostcommissionstate, hostrackid FROM csi_cm_hosts WHERE hostip IN ("
+    "SELECT CAST(bip AS IP) FROM ("
+    "SELECT '10' || SUBSTR(CAST(fip AS STRING), INSTR(CAST(fip AS STRING), '.')) AS bip "
+    "FROM (SELECT '23.210.88.145' AS fip)"
+    "))\""
+)
+    try:
+        decommission_out = subprocess.run(query_to_check_if_decommissioned, shell=True, text=True, capture_output=True)
+        decommission_out_stdout = decommission_out.stdout
+        print(f'{decommission_out_stdout}')
+    except subprocess.CalledProcessError as e:
+        print(f"Error running Query to check if machine has Decommissioned | Please cheack manually: {e}")
 
 
 
@@ -408,5 +423,8 @@ elif network == "ESSL":
 elif network == "COBRA":
     print ("Network is COBRA. Performing COBRA Checks...")
     cobra_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command,abstract)
+elif network == "CSI":
+    print ("Network is CSI. Performing CSI Checks...")
+    csi_checks(ipintic,ticid)
 else:
     print(f"{network} is a unknown network | Please proceed Manually")
