@@ -185,6 +185,10 @@ def suspension_time_check(suspension_data,network):
             print (f"Machine is just suspended for {tot_suspended_time} | NOT SAFE now.... | Safe after {int(remaining_mins)} minutes and {int(remaining_secs)} secs")
             suspended_date_time = 1
             return suspended_date_time
+    elif network in ["MAP","Mapper2","BRAVE","MTS","MOBILE"]: #checking networks which are safe to work just with a suspension entry
+        print("Machine suspended | safe to work")
+        suspended_date_time = 1
+        return suspended_date_time
 def suspendit(suspension_command):
     _CC.ClrPrint(f"--------------------",'BLK','BLD')
     _CC.ClrPrint("Running Maint",'MAG','BLD')
@@ -318,24 +322,39 @@ def disk_replacement_check(ipintic,ticid):
             except json.JSONDecodeError as e:
                 print(f"Error: The command output is not valid JSON. {e}")
                 print(f"JSON Output was: {json_data}")
-            if {disk_info['summary']} == f"Disk {disk_id} - OK": #evaluating if disk is safe to replace with O/P
+            if disk_info['summary'].strip() == f"Disk {disk_id} - OK".strip(): #evaluating if disk is safe to replace with O/P
                 _CC.ClrPrint(f"Disk {disk_id} - OK | Safe to Replace the Disk",'GRN','BLD')
+                try:
+                    tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Disk safety Replacement check | Safe to Replace {disk_id}" -d "Disk ID: {disk_id} Summary: {disk_info}"'
+                    tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
+                    print(f"Ticket Updated with Disk safety Replacement check Data")
+                except subprocess.CalledProcessError as e:
+                    print(f"Error updating ticket with suspension details: {e}")
                 #stoping akamai service as its safe to replace the disk
-                stop_akamai_command = f'erc {ipintic} stop akamai --noop --json'
-                stop_akamai_command_out = subprocess.run(stop_akamai_command, shell=True, text=True, capture_output=True)
-                print(f'stop_akamai_command_out')
-                return disk_id
-            else:
-                _CC.ClrPrint(f"Disk {disk_id} - OK | Not Safe to Replace the Disk",'RED','BLD')
-                stop_akamai_command = f'erc {ipintic} stop akamai --noop --josn'
-                print(f'{stop_akamai_command}')
+                stop_akamai_command = f'erc {ipintic} stop akamai'
+                print(f'Trying to stop akamai --> {stop_akamai_command}')
                 stop_akamai_command_out = subprocess.run(stop_akamai_command, shell=True, text=True, capture_output=True)
                 stop_akamai_command_stdout = stop_akamai_command_out.stdout
                 print(f'{stop_akamai_command_stdout}')
+                try:
+                    tic_update_command = f'update-tix -t {ticid} -a "Trying to stop akamai --> {stop_akamai_command}" -d "{stop_akamai_command_stdout}"'
+                    tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
+                    print(f"Ticket Updated")
+                    print(f"Safe to work | Do Not Rescue")
+                    sys.exit()
+                except subprocess.CalledProcessError as e:
+                    print(f"Error updating ticket with stop akamai details: {e}")
+                return disk_id
+            else:
+                _CC.ClrPrint(f"Not Safe to Replace the Disk {disk_id}",'RED','BLD')
                 #Ticket updation
-                #try:
-                tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Disk safety Replacement check" -d "Disk ID: {disk_id}"'
-                sys.exit()
+                try:
+                    tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Disk safety Replacement check | Not Safe to Replace {disk_id}" -d "Disk ID: {disk_id} Summary: {disk_info}"'
+                    tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
+                    print(f"Ticket Updated")
+                    sys.exit()
+                except subprocess.CalledProcessError as e:
+                    print(f"Error updating ticket with suspension details: {e}")
         else: 
             print("Error: Could not find JSON in the command output.")
         return disk_replacement_command_out
@@ -369,8 +388,8 @@ def essl_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command
 def cobra_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command,abstract):
     if "Failed backend data disk" in abstract or "Backend data disk has unacked errors" in abstract:
         disk_safety_check = disk_replacement_check(ipintic,ticid)
-    check_akamai_stdout_output = check_akamai(checkakamai_command)
-    machine_state = parse_check_akamai(check_akamai_stdout_output,ticid)
+    #check_akamai_stdout_output = check_akamai(checkakamai_command)
+    #machine_state = parse_check_akamai(check_akamai_stdout_output,ticid)
 
 def csi_checks(ipintic,ticid):
     query_to_check_if_decommissioned = (
@@ -385,8 +404,26 @@ def csi_checks(ipintic,ticid):
         decommission_out = subprocess.run(query_to_check_if_decommissioned, shell=True, text=True, capture_output=True)
         decommission_out_stdout = decommission_out.stdout
         print(f'{decommission_out_stdout}')
+        if "DECOMMISSIONED" in decommission_out_stdout:
+            tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Machine DECOMMISSIONED | Safe to Work" -d "{decommission_out_stdout}"'
+            tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
+            print (f"Machine DECOMMISSIONED | Safe To Work")
+        else:
+            tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Machine NOT DECOMMISSIONED | Not Safe to Work" -d "{decommission_out_stdout}"'
+            tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
+            print (f"Machine NOT DECOMMISSIONED | Not Safe To Work")
     except subprocess.CalledProcessError as e:
         print(f"Error running Query to check if machine has Decommissioned | Please cheack manually: {e}")
+
+def normal_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command):
+    check_akamai_stdout_output = check_akamai(checkakamai_command)
+    machine_state = parse_check_akamai(check_akamai_stdout_output,ticid)
+    check_suspension_stdout_output = check_suspension(checksuspension_command,ipintic)
+    suspension = parse_check_suspension(check_suspension_stdout_output,ipintic,ticid)
+    suspended_date_time = suspension_time_check(suspension,network)
+    if suspended_date_time == 1:
+       return
+    suspendit(suspension_command)
 
 
 
@@ -426,5 +463,10 @@ elif network == "COBRA":
 elif network == "CSI":
     print ("Network is CSI. Performing CSI Checks...")
     csi_checks(ipintic,ticid)
+elif network == "MAP" or network == "MTS" or network == "BRAVE" or network == "MOBILE" or network == "Mapper2" or network == "names":
+    print (f"Network is {network}. Performing {network} Checks...")
+    normal_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command)
+elif network == "EdgeCloud":
+    print (f"{network} machine | Please Escalate to Tier 2")
 else:
     print(f"{network} is a unknown network | Please proceed Manually")
