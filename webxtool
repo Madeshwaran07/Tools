@@ -4,9 +4,10 @@
 #                                                               #
 #      Tool to check,                                           #
 #        if the ticket is SAFE TO WORK, for FT to WORK          #
-#                                                               #
+#      Author: mks@akamai.com                                   #
+#              NOCC Tier-1                                      #
 #    usage:                                                     #
-#          webxtool $ticket                                     # 
+#          python webxtool -t $ticket                           # 
 #                                                               #
 #################################################################
 
@@ -428,13 +429,40 @@ def normal_checks(ipintic,region,ticid,checkakamai_command,checksuspension_comma
 
 
 #############################################################
-if __name__ == "__main__":
+import argparse
+import sys
 
-#chekcing if script got a tic as input
-    if len(sys.argv) != 2:
-        print("Usage: python webxtool $TICKET")
-        sys.exit(1)
-ticid = sys.argv[1]    #arg.parse(-t)
+if __name__ == "__main__":
+    # Create an argument parser
+    parser = argparse.ArgumentParser(description="Run WebXTool with a Ticket ID.")
+    
+    # Add the `-t` argument for the Ticket ID
+    parser.add_argument("-t", "--ticket", required=True, help="Ticket ID for WebXTool")
+
+    # Parse the command-line arguments
+    args = parser.parse_args()
+
+    # Get the ticket ID from the parsed arguments
+    ticid = args.ticket
+
+    print(f"Running WebXTool with Ticket ID: {ticid}")
+
+#try:
+    query_to_check_if_tic_in_sieble = f"/home/noccsync/nocc/sysops-labs/siebel_query --json -q \"SELECT * FROM CMN_INT.AK_ISSUE WHERE ISSUE_ID='{ticid}'\""
+    tic_raw_result = subprocess.check_output(query_to_check_if_tic_in_sieble,shell=True, text=True)
+    print (f"Checking if {ticid} is in sieble")
+    #print (tic_raw_result)
+    if "** no results found for the query specified" in tic_raw_result:
+        print(f"{ticid} Not a Valid ticket from sieble.......❌")
+        sys.exit()
+    else:
+        tic_parsed_result = json.loads(tic_raw_result)
+        #print(tic_parsed_result)
+        second_value = tic_parsed_result[0][1]
+        if ticid == second_value:
+            print(f"{ticid} Valid ticket from sieble.......✅")
+#except subprocess.CalledProcessError as e:
+
 
 print(f"Fetching IP & Region & Network.....")
 #query to fetch ip nw region abstract
