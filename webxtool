@@ -462,8 +462,6 @@ if __name__ == "__main__":
         if ticid == second_value:
             print(f"{ticid} Valid ticket from sieble.......✅")
 #except subprocess.CalledProcessError as e:
-
-
 print(f"Fetching IP & Region & Network.....")
 #query to fetch ip nw region abstract
 query_for_ip_nw_region_abstract= f"/home/noccsync/nocc/sysops-labs/siebel_query --json -q \"select IP_ASSET_IP_ADDRESS,ABSTRACT,REGION_NUMBER,REGION_NETWORK from CMN_INT.AK_ISSUE where ISSUE_ID='{ticid}'\""
