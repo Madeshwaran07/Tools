@@ -188,7 +188,7 @@ def suspension_time_check(suspension_data,network):
             tot_suspended_time = timedelta(seconds=diff_in_secs)
             print (f"Machine is just suspended for {tot_suspended_time} | NOT SAFE now.... | Safe after {int(remaining_mins)} minutes and {int(remaining_secs)} secs")
             try:
-                tic_update_command = f'update-tix -t {ticid} -a "NOT SAFE TO WORK" -d " Machine is suspended for more than 30 mins, just suspended for {diff_in_mins} mins {suspension_data} safe after {int(remaining_mins)} minutes and {int(remaining_secs)} secs "'
+                tic_update_command = f'update-tix -t {ticid} -a "NOT SAFE TO WORK" -d " Machine is just suspended for {diff_in_mins} mins {suspension_data} safe after {int(remaining_mins)} minutes and {int(remaining_secs)} secs "'
                 tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
                 print(f"Updating Ticket with suspenson data")
             except subprocess.CalledProcessError as e:
@@ -471,7 +471,7 @@ elif network == "COBRA":
     print ("Network is COBRA. Performing COBRA Checks...")
     cobra_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command,abstract)
 elif network == "CSI":
-    print ("Network is CSI. Performing CSI Checks...")
+    print ("Network is CSI. Performing CSI Checks...") 
     csi_checks(ipintic,ticid)
 elif network == "MAP" or network == "MTS" or network == "BRAVE" or network == "MOBILE" or network == "Mapper2" or network == "names":
     print (f"Network is {network}. Performing {network} Checks...")
