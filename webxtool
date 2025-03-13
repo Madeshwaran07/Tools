@@ -291,12 +291,17 @@ def active_window_time_check(secure_rack_access_tic):
             time_left_to_access_window = win_end_time - win_start_time
             if time_left_to_access_window < timedelta(hours=24) and win_end_time > win_start_time and current_time > win_start_time:
                 print("Access window is less than 24 hours, and the current time is within the window.")
+                print(f"Start time: {win_start_time}")
+                print(f"End time: {win_end_time}")
+                formatted_time = current_time.strftime("%m/%d/%Y %H:%M in GMT")
+                print(f"Current date and time: {formatted_time}")
             else:
-                print("Conditions are not met.")
-            print(f"Start time: {win_start_time}")
-            print(f"End time: {win_end_time}")
-            formatted_time = current_time.strftime("%m/%d/%Y %H:%M in GMT")
-            print(f"Current date and time: {formatted_time}")
+                print(f"Start time: {win_start_time}")
+                print(f"End time: {win_end_time}")
+                formatted_time = current_time.strftime("%m/%d/%Y %H:%M in GMT")
+                print(f"Current date and time: {formatted_time}")
+                print("Window time Conditions are'nt met | NOT SAFE TO WORK")
+                sys.exit()
     except subprocess.CalledProcessError as e:
         print(f"Error fetching Description from Ticket | Please check manually")
 
