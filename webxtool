@@ -269,6 +269,8 @@ def malt_region(region,malt_command):
             _CC.ClrPrint(f"Running Malt to find Secure Rack Access Ticket | ==> Ticket Not Found",'MAG','BLD')
             _CC.ClrPrint(f"--------------------",'BLK','BLD')
             print(f"No Secure Rack Access Ticket found | Not Safe to Work")
+            tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Not Safe to Work" -d " malt {region} | No Secure Rack Access Ticket found {target_abstract} : {ticket_with_target_abstract} "'
+            tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
             sys.exit()
     except subprocess.CalledProcessError as e:
         print(f"Error Running malt: {e}")
@@ -389,7 +391,7 @@ def essl_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command
     check_akamai_stdout_output = check_akamai(checkakamai_command)
     machine_state = parse_check_akamai(check_akamai_stdout_output,ticid)
     check_suspension_stdout_output = check_suspension(checksuspension_command,ipintic)
-    suspension = parse_check_suspension(check_suspension_stdout_output,ipintic,ticid)
+    suspension = parse_check_suspension(check_suspension_stdout_output,ipintic,ticid,machine_state)
     suspended_date_time = suspension_time_check(suspension,network)
     if suspended_date_time == 1:
         return
