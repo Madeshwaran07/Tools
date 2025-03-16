@@ -24,6 +24,7 @@ import akamai.color
 
 _CC = akamai.color.colors()
 
+all_data = []
 #function to fetch required data and parse it.
 def fetch_required_data(query_for_ip_nw_region_abstract):
     try:
@@ -81,7 +82,9 @@ def parse_check_akamai(check_akamai_stdout_output,ticid):
         print(machine_state)
         print ("\n Updating machine state to Ticket")
         tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Check akamai" -d "{machine_state}"'
-        tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
+        #tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
+       #with open(f"{ticid}.txt", "a") as file:
+        #file.write(machine_state)
         return machine_state
 def check_suspension(checksuspension_command,ipintic):
     try:
@@ -91,7 +94,8 @@ def check_suspension(checksuspension_command,ipintic):
         return check_suspension_stdout_output
     except subprocess.CalledProcessError as e:
         print(f"Error Checking suspension: {e}")
-def parse_check_suspension(check_suspension_stdout_output,ipintic,ticid):
+def parse_check_suspension(check_suspension_stdout_output,ipintic,ticid,machine_state):
+        print (machine_state)
         _CC.ClrPrint(f"--------------------",'BLK','BLD')
         _CC.ClrPrint("Checking suspension",'MAG','BLD')
         _CC.ClrPrint(f"--------------------",'BLK','BLD')
@@ -102,7 +106,7 @@ def parse_check_suspension(check_suspension_stdout_output,ipintic,ticid):
         if data.get("num_matches",0) == 0:
             suspension = "No suspension records found."
             try:
-                tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Checking Suspension | Suspendtell {ticid} | No Suspension Found" -d "{suspension}"'
+                tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Check akamai | Suspension" -d "{machine_state} {suspension}"'
                 tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
                 print(f"Updating Ticket with suspenson data")
             except subprocess.CalledProcessError as e:
@@ -125,7 +129,7 @@ def parse_check_suspension(check_suspension_stdout_output,ipintic,ticid):
                     suspension = f"(Ticket:{ticket} \n Target-1:{target1} Reason:{reason1} Datetime:{datetime1} Username:{username1})\n Target-2:{target2} Reason:{reason2}  Datetime:{datetime2} Username:{username2})"
                     _CC.ClrPrint("Machine is suspended",'GRN')
                     try:
-                        tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Checking Suspension | Suspendtell {ticid} | Suspension Found" -d "{suspension}"'
+                        tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Check akamai | Suspension" -d "{machine_state} {suspension}"'
                         tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
                         print(f"Updating Ticket with suspenson data")
                     except subprocess.CalledProcessError as e:
@@ -142,7 +146,7 @@ def parse_check_suspension(check_suspension_stdout_output,ipintic,ticid):
                 suspension = f"(Ticket:{ticket} \n Target:{target} \n Reason:{reason} \n Datetime:{datetime} \n Username:{username})"
                 _CC.ClrPrint("Machine is suspended",'GRN')
                 try:
-                    tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Checking Suspension | Suspendtell {ticid} | Suspension Found" -d "{suspension}"'
+                    tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Check akamai | Suspension" -d "{machine_state} {suspension}"'
                     tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
                     print(f"Updating Ticket with suspenson data")
                 except subprocess.CalledProcessError as e:
@@ -171,7 +175,7 @@ def suspension_time_check(suspension_data,network):
             _CC.ClrPrint(f"Machine is suspended for more than 30 mins | Machine is suspended for {diff_in_mins} mins",'GRN')
             _CC.ClrPrint(f"SAFE TO WORK",'NRM','BLD')
             try:
-                tic_update_command = f'update-tix -t {ticid} -a "Machine is suspended for more than 30 mins | Machine is suspended for {diff_in_mins} mins | SAFE TO WORK" -d "{suspension_data}"'
+                tic_update_command = f'update-tix -t {ticid} -a "SAFE TO WORK" -d " Machine is suspended for more than 30 mins | Machine is suspended for {diff_in_mins} mins {suspension_data}"'
                 tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
                 print(f"Updating Ticket with suspenson data")
             except subprocess.CalledProcessError as e:
@@ -184,6 +188,12 @@ def suspension_time_check(suspension_data,network):
             remaining_mins, remaining_secs = divmod(remaining_time.total_seconds(), 60)
             tot_suspended_time = timedelta(seconds=diff_in_secs)
             print (f"Machine is just suspended for {tot_suspended_time} | NOT SAFE now.... | Safe after {int(remaining_mins)} minutes and {int(remaining_secs)} secs")
+            try:
+                tic_update_command = f'update-tix -t {ticid} -a "NOT SAFE TO WORK" -d " Machine is just suspended for {diff_in_mins} mins {suspension_data} safe after {int(remaining_mins)} minutes and {int(remaining_secs)} secs "'
+                tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
+                print(f"Updating Ticket with suspenson data")
+            except subprocess.CalledProcessError as e:
+                print(f"Error updating ticket with suspension details: {e}")
             suspended_date_time = 1
             return suspended_date_time
     elif network in ["MAP","Mapper2","BRAVE","MTS","MOBILE"]: #checking networks which are safe to work just with a suspension entry
@@ -224,7 +234,7 @@ def suspendit(suspension_command):
         for key, value in data.items():
             print(f"{key}: {value}")
         _CC.ClrPrint(f"Machine Suspended | Safe after {suspention_time}",'MAG','BLD')
-        suspension_output_tic_update_command = f'update-tix -t {ticid} -a "Machine  suspended | Safe after {suspention_time}" -d "{suspended_out}"'
+        suspension_output_tic_update_command = f'update-tix -t {ticid} -a "Safe after {suspention_time}" -d "{suspended_out}"'
         suspension_output_tic_update_command_out = subprocess.run(suspension_output_tic_update_command, shell=True, text=True, capture_output=True)
         print(f"Updating Ticket with suspended data")
     else:   
@@ -260,6 +270,8 @@ def malt_region(region,malt_command):
             _CC.ClrPrint(f"Running Malt to find Secure Rack Access Ticket | ==> Ticket Not Found",'MAG','BLD')
             _CC.ClrPrint(f"--------------------",'BLK','BLD')
             print(f"No Secure Rack Access Ticket found | Not Safe to Work")
+            tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Not Safe to Work" -d " malt {region} | No Secure Rack Access Ticket found {target_abstract} : {ticket_with_target_abstract} "'
+            tic_update_command_out = subprocess.run(tic_update_command, shell=True, text=True, capture_output=True)
             sys.exit()
     except subprocess.CalledProcessError as e:
         print(f"Error Running malt: {e}")
@@ -280,12 +292,17 @@ def active_window_time_check(secure_rack_access_tic):
             time_left_to_access_window = win_end_time - win_start_time
             if time_left_to_access_window < timedelta(hours=24) and win_end_time > win_start_time and current_time > win_start_time:
                 print("Access window is less than 24 hours, and the current time is within the window.")
+                print(f"Start time: {win_start_time}")
+                print(f"End time: {win_end_time}")
+                formatted_time = current_time.strftime("%m/%d/%Y %H:%M in GMT")
+                print(f"Current date and time: {formatted_time}")
             else:
-                print("Conditions are not met.")
-            print(f"Start time: {win_start_time}")
-            print(f"End time: {win_end_time}")
-            formatted_time = current_time.strftime("%m/%d/%Y %H:%M in GMT")
-            print(f"Current date and time: {formatted_time}")
+                print(f"Start time: {win_start_time}")
+                print(f"End time: {win_end_time}")
+                formatted_time = current_time.strftime("%m/%d/%Y %H:%M in GMT")
+                print(f"Current date and time: {formatted_time}")
+                print("Window time Conditions are'nt met | NOT SAFE TO WORK")
+                sys.exit()
     except subprocess.CalledProcessError as e:
         print(f"Error fetching Description from Ticket | Please check manually")
 
@@ -366,9 +383,9 @@ def disk_replacement_check(ipintic,ticid):
 def freeflow_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command):
     #calling all required funcs to do freeflow checks
     check_akamai_stdout_output = check_akamai(checkakamai_command)
-    machine_state = parse_check_akamai(check_akamai_stdout_output,ticid)
+    machine_state = parse_check_akamai(check_akamai_stdout_output,ticid,)
     check_suspension_stdout_output = check_suspension(checksuspension_command,ipintic)
-    suspension = parse_check_suspension(check_suspension_stdout_output,ipintic,ticid)
+    suspension = parse_check_suspension(check_suspension_stdout_output,ipintic,ticid,machine_state)
     suspended_date_time = suspension_time_check(suspension,network)
     if suspended_date_time == 1:
         return
@@ -380,7 +397,7 @@ def essl_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command
     check_akamai_stdout_output = check_akamai(checkakamai_command)
     machine_state = parse_check_akamai(check_akamai_stdout_output,ticid)
     check_suspension_stdout_output = check_suspension(checksuspension_command,ipintic)
-    suspension = parse_check_suspension(check_suspension_stdout_output,ipintic,ticid)
+    suspension = parse_check_suspension(check_suspension_stdout_output,ipintic,ticid,machine_state)
     suspended_date_time = suspension_time_check(suspension,network)
     if suspended_date_time == 1:
         return
@@ -487,7 +504,7 @@ elif network == "COBRA":
     print ("Network is COBRA. Performing COBRA Checks...")
     cobra_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command,abstract)
 elif network == "CSI":
-    print ("Network is CSI. Performing CSI Checks...")
+    print ("Network is CSI. Performing CSI Checks...") 
     csi_checks(ipintic,ticid)
 elif network == "MAP" or network == "MTS" or network == "BRAVE" or network == "MOBILE" or network == "Mapper2" or network == "names":
     print (f"Network is {network}. Performing {network} Checks...")
