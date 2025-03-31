@@ -286,6 +286,62 @@ def active_window_time_check(secure_rack_access_tic):
 
     #print(desc)
 
+def disk_replacement_check(ipintic,ticid):
+    disk_id = input("Enter the Disk details: ")
+    _CC.ClrPrint(f"--------------------",'BLK','BLD')
+    _CC.ClrPrint(f"Running disk-replacement-safety.py --ip {ipintic} {disk_id}",'BLK','BLD')
+    _CC.ClrPrint(f"--------------------",'BLK','BLD')
+    disk_replacement_command = f"disk-replacement-safety.py --json --ip {ipintic} {disk_id}"
+    try:
+        disk_replacement_command_out = subprocess.run(disk_replacement_command, shell=True, text=True, capture_output=True)
+        disk_replacement_command_stdout = disk_replacement_command_out.stdout.strip()
+        # Print the raw output for debugging
+        #print(f"Command Output: {disk_replacement_command_stdout}")
+        
+        # Extract the JSON portion of the output (starting with '{')
+        json_data_start = disk_replacement_command_stdout.find('{')
+        
+        if json_data_start != -1:
+            # Extract the JSON part and parse it
+            json_data = disk_replacement_command_stdout[json_data_start:]
+            try:
+                data = json.loads(json_data)
+                disk_details = data['disk_details']
+                for disk_id, disk_info in disk_details.items():
+                    print(f"Disk ID: {disk_id}")
+                    print("Messages:")
+                    for message in disk_info['messages']:
+                        print(f"  - {message}")
+                    print(f"Summary: {disk_info['summary']}")
+                    print(f"OK Status: {disk_info['ok']}")
+                    print("-" * 60)
+            except json.JSONDecodeError as e:
+                print(f"Error: The command output is not valid JSON. {e}")
+                print(f"JSON Output was: {json_data}")
+            if {disk_info['summary']} == f"Disk {disk_id} - OK": #evaluating if disk is safe to replace with O/P
+                _CC.ClrPrint(f"Disk {disk_id} - OK | Safe to Replace the Disk",'GRN','BLD')
+                #stoping akamai service as its safe to replace the disk
+                stop_akamai_command = f'erc {ipintic} stop akamai --noop --json'
+                stop_akamai_command_out = subprocess.run(stop_akamai_command, shell=True, text=True, capture_output=True)
+                print(f'stop_akamai_command_out')
+                return disk_id
+            else:
+                _CC.ClrPrint(f"Disk {disk_id} - OK | Not Safe to Replace the Disk",'RED','BLD')
+                stop_akamai_command = f'erc {ipintic} stop akamai --noop --josn'
+                print(f'{stop_akamai_command}')
+                stop_akamai_command_out = subprocess.run(stop_akamai_command, shell=True, text=True, capture_output=True)
+                stop_akamai_command_stdout = stop_akamai_command_out.stdout
+                print(f'{stop_akamai_command_stdout}')
+                #Ticket updation
+                #try:
+                tic_update_command = f'update-tix -t {ticid} -a "Running Webxtool | Disk safety Replacement check" -d "Disk ID: {disk_id}"'
+                sys.exit()
+        else: 
+            print("Error: Could not find JSON in the command output.")
+        return disk_replacement_command_out
+    except subprocess.CalledProcessError as e:
+        print(f"Error disk_replacement_check : {e}")
+    
     
 def freeflow_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command):
     #calling all required funcs to do freeflow checks
@@ -310,6 +366,15 @@ def essl_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command
         return
     suspendit(suspension_command)
 
+def cobra_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command,abstract):
+    if "Failed backend data disk" in abstract or "Backend data disk has unacked errors" in abstract:
+        disk_safety_check = disk_replacement_check(ipintic,ticid)
+    check_akamai_stdout_output = check_akamai(checkakamai_command)
+    machine_state = parse_check_akamai(check_akamai_stdout_output,ticid)
+
+
+
+
 #############################################################
 if __name__ == "__main__":
 
@@ -317,7 +382,7 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python webxtool $TICKET")
         sys.exit(1)
-ticid = sys.argv[1]
+ticid = sys.argv[1]    #arg.parse(-t)
 
 print(f"Fetching IP & Region & Network.....")
 #query to fetch ip nw region abstract
@@ -340,5 +405,8 @@ if network == "FreeFlow":
 elif network == "ESSL":
     print ("Network is ESSL. Performing ESSL Checks...")
     essl_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command,malt_command)
+elif network == "COBRA":
+    print ("Network is COBRA. Performing COBRA Checks...")
+    cobra_checks(ipintic,region,ticid,checkakamai_command,checksuspension_command,network,suspension_command,abstract)
 else:
     print(f"{network} is a unknown network | Please proceed Manually")
